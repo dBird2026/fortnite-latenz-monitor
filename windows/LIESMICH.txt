@@ -1,0 +1,32 @@
+Fortnite-Latenz-Monitor für Windows
+===================================
+
+Misst alle 5 Minuten die Latenz zu den Fortnite-Servern (echtes Epic-Paketformat,
+UDP 22222), zum eigenen Router, zum ersten Netzknoten des Providers und zu 1.1.1.1.
+Einmal pro Stunde läuft ein Speedtest. Alles wird lokal gespeichert.
+Keine Installation nötig.
+
+START
+  1. ZIP entpacken, z. B. nach  C:\Users\<Name>\FortniteLatenzMonitor
+  2. 1_Messung_starten.cmd       startet die Dauermessung und öffnet das Dashboard
+                                 (http://localhost:8765). Fenster offen lassen,
+                                 minimieren ist ok. Der PC geht währenddessen
+                                 nicht in den Standby.
+     Meldet Windows "Der Computer wurde durch Windows geschützt":
+     "Weitere Informationen" > "Trotzdem ausführen".
+
+WEITERE FUNKTIONEN
+  2_Dashboard_oeffnen.cmd        Dashboard erneut öffnen
+  3_Status_anzeigen.cmd          Kurzübersicht im Konsolenfenster
+  4_Einstellungen_oeffnen.cmd    config.toml (Ziele, Intervall, Schwellen) und Datenordner
+
+DATEN
+  %LOCALAPPDATA%\FortniteLatenzMonitor\
+    data.db          alle Messwerte (SQLite)
+    data-backup.db   tägliche Sicherung
+    monitor.log      Protokoll
+    config.toml      Einstellungen
+
+UPDATE
+  Messfenster schließen, Programmordner mit dem neuen ZIP überschreiben.
+  Messdaten und Einstellungen bleiben erhalten.

@@ -1,0 +1,32 @@
+# Fortnite-Latenz-Monitor auf der QNAP (Container Station -> Anwendungen -> Erstellen)
+#
+# - network_mode: host  -> misst wie ein normales Gerät im Heimnetz (Router, Cable4-Knoten, Fortnite-Server)
+# - Daten liegen in /share/Container/fortnite-latenz-monitor/data (data.db, config.toml, monitor.log)
+# - Watchtower prüft stündlich, ob es ein neues Image gibt, und aktualisiert den Monitor selbstständig
+# - Dashboard: http://<NAS-IP>:8765
+
+services:
+  monitor:
+    image: ghcr.io/dbird2026/fortnite-latenz-monitor:latest
+    container_name: fortnite-latenz-monitor
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - /share/Container/fortnite-latenz-monitor/data:/data
+    environment:
+      TZ: Europe/Berlin
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  watchtower:
+    # Gepflegter Fork des eingestellten containrrr/watchtower (läuft auch mit aktuellen Docker-Versionen)
+    image: nickfedor/watchtower:latest
+    container_name: fortnite-latenz-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: Europe/Berlin
+      WATCHTOWER_LABEL_ENABLE: "true"   # nur Container mit dem Label oben aktualisieren
+      WATCHTOWER_POLL_INTERVAL: "3600"  # stündlich prüfen
+      WATCHTOWER_CLEANUP: "true"        # alte Images löschen

@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fortnite-Latenz-Monitor</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b; --good-text: #006300;
+  --q1: #cde2fb; --q2: #9ec5f4; --q3: #6da7ec; --q4: #3987e5; --q5: #256abf; --q6: #184f95; --q7: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --good-text: #0ca30c;
+    --q1: #0d366b; --q2: #184f95; --q3: #1c5cab; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef; --q7: #b7d3f6;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --good-text: #0ca30c;
+    --q1: #0d366b; --q2: #184f95; --q3: #1c5cab; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef; --q7: #b7d3f6;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 2px; font-weight: 600; }
+.sub { color: var(--ink-2); font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.grid { display: grid; gap: 12px; }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 12px; }
+.tile .label { color: var(--ink-2); font-size: 12.5px; }
+.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.tile .value small { font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.tile .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-bottom: 12px; }
+.badge { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px;
+  padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); }
+.dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.status .meta { color: var(--ink-2); }
+.alert { color: var(--crit); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; color: var(--ink-2); padding: 6px 12px; font: inherit; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--s1); color: #fff; font-weight: 600; }
+select, input, .btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; }
+.btn { cursor: pointer; text-decoration: none; display: inline-block; }
+.btn:hover, .seg button:hover { filter: brightness(0.96); }
+.spacer { flex: 1; }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend i.band { height: 10px; opacity: .25; }
+.legend i.dash { background: none !important; border-top: 2px dashed var(--muted); height: 0; }
+.legend.toggles { gap: 6px; }
+.legend.toggles button { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+.legend.toggles button[aria-pressed="false"] { color: var(--muted); }
+.legend.toggles button[aria-pressed="false"] i { opacity: .25; }
+.legend.toggles button[aria-pressed="false"] span { text-decoration: line-through; }
+.legend.toggles button:hover { border-color: var(--axis); }
+.chart { position: relative; height: 300px; }
+.chart.small { height: 200px; }
+.two { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); margin-top: 12px; }
+.heat { width: 100%; border-collapse: separate; border-spacing: 2px; table-layout: fixed; font-size: 11.5px; }
+.heat th { color: var(--muted); font-weight: 500; }
+.heat td { height: 22px; border-radius: 3px; background: var(--grid); }
+.heat td:hover { outline: 2px solid var(--ink); }
+.scale { display: flex; align-items: center; gap: 2px; font-size: 11.5px; color: var(--ink-2); margin-top: 8px; flex-wrap: wrap; }
+.scale b { width: 26px; height: 10px; border-radius: 2px; display: inline-block; }
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.data th, table.data td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th { color: var(--ink-2); font-weight: 500; }
+.ev { list-style: none; padding: 0; margin: 8px 0 0; max-height: 220px; overflow: auto; font-size: 13px; }
+.ev li { padding: 4px 0; border-bottom: 1px solid var(--grid); display: flex; gap: 10px; }
+.ev time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ev .t { font-weight: 600; min-width: 64px; }
+form.note { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+form.note input[type=text] { flex: 1; min-width: 200px; }
+.tip { position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); display: none; z-index: 10; }
+.nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.nav-label { flex: 1; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 220px; }
+.nav .btn:disabled { opacity: .4; cursor: default; filter: none; }
+.nav .live { color: var(--good-text); font-weight: 600; }
+.pan { cursor: grab; touch-action: pan-y; }
+.pan.dragging { cursor: grabbing; }
+.hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
+footer { color: var(--muted); font-size: 12px; margin-top: 16px; }
+@media (max-width: 600px) { .two { grid-template-columns: 1fr; } .chart { height: 240px; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Fortnite-Latenz-Monitor</h1>
+    <span class="sub" id="sub">Cable4-Anschluss · Messung alle 5 Minuten</span>
+  </header>
+
+  <section class="card status" aria-live="polite">
+    <span class="badge" id="ampel"><span class="dot"></span><span>Lade …</span></span>
+    <span class="meta" id="jetzt"></span>
+    <span class="meta" id="letzte"></span>
+  </section>
+
+  <section class="grid tiles">
+    <div class="card tile"><div class="label">Fortnite heute · Median</div><div class="value" id="k-med">–</div><div class="note" id="k-med-n"></div></div>
+    <div class="card tile"><div class="label">Fortnite heute · 95. Perzentil</div><div class="value" id="k-p95">–</div><div class="note">5 % der Messungen lagen darüber</div></div>
+    <div class="card tile"><div class="label">Kaum spielbar · letzte 7 Tage</div><div class="value" id="k-krit">–</div><div class="note" id="k-krit-n"></div></div>
+    <div class="card tile"><div class="label">Letzter Speedtest</div><div class="value" id="k-sp">–</div><div class="note" id="k-sp-n"></div></div>
+  </section>
+
+  <div class="filters">
+    <div class="seg" role="group" aria-label="Zeitraum" id="range">
+      <button data-h="24" aria-pressed="true">24 Std.</button>
+      <button data-h="168">7 Tage</button>
+      <button data-h="720">30 Tage</button>
+      <button data-h="custom">Eigener</button>
+    </div>
+    <span id="custom" hidden>
+      <input type="datetime-local" id="von" aria-label="von"> –
+      <input type="datetime-local" id="bis" aria-label="bis">
+      <button class="btn" id="apply">Anzeigen</button>
+    </span>
+    <label class="sub">Fortnite-Server
+      <select id="server"><option value="">Mittel aller EU-Server</option></select>
+    </label>
+    <span class="spacer"></span>
+    <a class="btn" id="csv" href="/api/export.csv">CSV exportieren</a>
+  </div>
+
+  <section class="card">
+    <div class="chart-head">
+      <div><h2>Latenz im Zeitverlauf</h2><div class="sub">Linie = Median je Zeitfenster, Fläche = Bereich Minimum bis 95. Perzentil (Fortnite)</div></div>
+      <div class="legend toggles" id="lg-main" role="group" aria-label="Werte ein- und ausblenden"></div>
+    </div>
+    <div class="nav" role="group" aria-label="Zeitraum verschieben">
+      <button class="btn" id="nav-prev" title="Früher (Pfeil links)">◀ früher</button>
+      <span class="nav-label" id="nav-label" aria-live="polite"></span>
+      <button class="btn" id="nav-next" title="Später (Pfeil rechts)">später ▶</button>
+      <button class="btn" id="nav-now" title="Zurück zur aktuellen Zeit">Jetzt</button>
+    </div>
+    <div class="chart pan" id="pan-area"><canvas id="c-main"></canvas></div>
+    <div class="sub hint">Tipp: Diagramm mit der Maus (oder dem Finger) nach links/rechts ziehen, um durch die Zeit zu blättern.</div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <div class="chart-head"><div><h2>Paketverlust</h2><div class="sub">Anteil verlorener Pakete je Zeitfenster</div></div><div class="legend" id="lg-loss"></div></div>
+      <div class="chart small"><canvas id="c-loss"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><div><h2>Speedtest</h2><div class="sub">stündlich, Mbit/s</div></div><div class="legend" id="lg-sp"></div></div>
+      <div class="chart small"><canvas id="c-sp"></canvas></div>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <h2>Tagesgang Fortnite · letzte 4 Wochen</h2>
+      <div class="sub">Median der Latenz je Wochentag und Stunde (Ortszeit)</div>
+      <table class="heat" id="heat" aria-label="Tagesgang"></table>
+      <div class="scale" id="heat-scale"></div>
+    </div>
+    <div class="card">
+      <h2>Letzte Messrunde</h2>
+      <div class="sub" id="lr-time"></div>
+      <table class="data" id="last"></table>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:12px">
+    <h2>Notizen &amp; Ereignisse</h2>
+    <div class="sub">Notizen erscheinen im Bericht – z. B. „Match abgebrochen“ oder „Download lief“.</div>
+    <form class="note" id="note">
+      <input type="text" id="note-text" maxlength="500" placeholder="Notiz, z. B. 20:15 Fortnite-Match wegen Lag verloren">
+      <input type="datetime-local" id="note-time" aria-label="Zeitpunkt (leer = jetzt)">
+      <button class="btn" type="submit">Notiz speichern</button>
+    </form>
+    <ul class="ev" id="events"></ul>
+  </section>
+
+  <footer>Aktualisiert sich jede Minute · Daten bleiben lokal auf diesem PC</footer>
+</main>
+<div class="tip" id="tip"></div>
+
+<script src="/static/chart.umd.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 0) => v == null ? '–' : v.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
+const dt = (ms, withDate = true) => new Date(ms).toLocaleString('de-DE', withDate
+  ? { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' });
+const toLocalInput = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const alpha = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+let state = { hours: 24, end: null, server: '', show: { fortnite: true } };  // show: sichtbare Werte im Zeitverlauf  // end = Ende des Fensters in ms, null = jetzt (live)
+let charts = {}, lastStatus = null, lastSerie = null;
+
+// ------------------------------------------------------------------ Status & Kacheln
+const AMPEL = {
+  gut: ['--good', 'Gut spielbar', '✓'], spuerbar: ['--warn', 'Spürbar verzögert', '!'],
+  kritisch: ['--crit', 'Kaum spielbar', '✕'], unbekannt: ['--muted', 'Noch keine Daten', '?'] };
+
+function renderStatus(s) {
+  lastStatus = s;
+  const [col, label, icon] = AMPEL[s.ampel] || AMPEL.unbekannt;
+  $('#ampel').innerHTML = `<span class="dot" style="background:var(${col})"></span><span aria-hidden="true">${icon}</span><span>${label}</span>`;
+  $('#jetzt').innerHTML = s.fortnite_median == null ? '' :
+    `Fortnite jetzt: <b>${fmt(s.fortnite_median)} ms</b> · Verlust ${fmt(s.fortnite_verlust, 1)} %`;
+  if (!s.letzte_messung) { $('#letzte').textContent = ''; }
+  else if (!s.messung_laeuft) {
+    $('#letzte').innerHTML = `<span class="alert">Messung läuft nicht</span> – letzte Messung ${dt(Date.parse(s.letzte_messung))}`;
+  } else {
+    $('#letzte').textContent = `Letzte Messung vor ${fmt(s.alter_min)} Min. · ${s.runden_gesamt} Messrunden seit ${new Date(s.erste_messung).toLocaleDateString('de-DE')}`;
+  }
+  $('#k-med').innerHTML = s.heute_median == null ? '–' : `${fmt(s.heute_median)} <small>ms</small>`;
+  $('#k-med-n').textContent = `${s.heute_runden} Messrunden heute · gut < ${s.schwellen.gut} ms`;
+  $('#k-p95').innerHTML = s.heute_p95 == null ? '–' : `${fmt(s.heute_p95)} <small>ms</small>`;
+  $('#k-krit').innerHTML = s.kritisch_7t_pct == null ? '–' : `${fmt(s.kritisch_7t_pct)} <small>% der Zeit</small>`;
+  let n = `über ${s.schwellen.kritisch} ms oder > ${fmt(s.schwellen.verlust, 0)} % Verlust`;
+  if (s.kritisch_vorwoche_pct != null && s.kritisch_7t_pct != null) {
+    const d = s.kritisch_7t_pct - s.kritisch_vorwoche_pct;
+    n += ` · Vorwoche ${fmt(s.kritisch_vorwoche_pct)} % (${d >= 0 ? '+' : '−'}${fmt(Math.abs(d))} Pkt.)`;
+  }
+  $('#k-krit-n').textContent = n;
+  if (s.speedtest) {
+    $('#k-sp').innerHTML = `${fmt(s.speedtest.down_mbit)} <small>/ ${fmt(s.speedtest.up_mbit)} Mbit/s</small>`;
+    $('#k-sp-n').textContent = `Down / Up · ${dt(Date.parse(s.speedtest.ts_utc))}`;
+  } else { $('#k-sp').textContent = '–'; $('#k-sp-n').textContent = 'noch kein Ergebnis'; }
+
+  const tbl = $('#last');
+  tbl.innerHTML = '<tr><th>Ziel</th><th>Median ms</th><th>p95 ms</th><th>Jitter ms</th><th>Verlust %</th></tr>' +
+    s.ziele.map(t => `<tr><td>${t.name}</td><td>${fmt(t.median, 1)}</td><td>${fmt(t.p95, 1)}</td><td>${fmt(t.jitter, 1)}</td><td>${fmt(t.loss)}</td></tr>`).join('');
+  $('#lr-time').textContent = s.letzte_messung ? dt(Date.parse(s.letzte_messung)) : '';
+  const sel = $('#server');
+  if (sel.options.length === 1) s.ziele.filter(t => t.typ === 'epic').forEach(t => sel.add(new Option(t.name, t.name)));
+}
+
+// ------------------------------------------------------------------ Charts
+function withGaps(points, bucket, idx) {
+  const out = []; let prev = null;
+  for (const p of points) {
+    if (prev != null && p[0] - prev > 2.5 * bucket) out.push({ x: (prev + bucket) * 1000, y: null });
+    out.push({ x: p[0] * 1000, y: p[idx] }); prev = p[0];
+  }
+  return out;
+}
+
+const thresholdPlugin = {
+  id: 'thresholds',
+  afterDatasetsDraw(chart, _, opts) {
+    if (!opts.lines) return;
+    const { ctx, chartArea: a, scales: { y } } = chart;
+    ctx.save();
+    for (const [val, text] of opts.lines) {
+      if (val < y.min || val > y.max) continue;
+      const py = y.getPixelForValue(val);
+      ctx.strokeStyle = css('--muted'); ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(a.left, py); ctx.lineTo(a.right, py); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = css('--ink-2'); ctx.font = '11.5px system-ui, sans-serif';
+      ctx.textAlign = 'right'; ctx.fillText(text, a.right - 4, py - 4);
+    }
+    ctx.restore();
+  }
+};
+Chart.register(thresholdPlugin);
+
+// Gut lesbare Zeitachse: alle 3 Std. (kurze Zeiträume) bzw. um Mitternacht (lange Zeiträume)
+function niceTicks(min, max) {
+  const span = max - min, out = [];
+  if (span <= 48 * 3600e3) {
+    const step = span <= 12 * 3600e3 ? 1 : 3;
+    const d = new Date(min); d.setMinutes(0, 0, 0); d.setHours(Math.ceil(d.getHours() / step) * step);
+    for (; d.getTime() <= max; d.setHours(d.getHours() + step)) if (d.getTime() >= min) out.push(d.getTime());
+  } else {
+    const stepDays = Math.max(1, Math.ceil(span / 864e5 / 10));
+    const d = new Date(min); d.setHours(24, 0, 0, 0);
+    for (; d.getTime() <= max; d.setDate(d.getDate() + stepDays)) out.push(d.getTime());
+  }
+  return out;
+}
+function tickLabel(v, span) {
+  const d = new Date(v);
+  if (span > 48 * 3600e3) return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  if (d.getHours() === 0) return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function baseOptions(yTitle, spanMs) {
+  return {
+    responsive: true, maintainAspectRatio: false, animation: false, normalized: true,
+    interaction: { mode: 'index', intersect: false },
+    scales: {
+      x: { type: 'linear', grid: { color: css('--grid') }, border: { color: css('--axis') },
+           afterBuildTicks: sc => { sc.ticks = niceTicks(sc.min, sc.max).map(value => ({ value })); },
+           ticks: { color: css('--muted'), maxRotation: 0, autoSkip: true, autoSkipPadding: 16, callback: v => tickLabel(v, spanMs) } },
+      y: { beginAtZero: true, grid: { color: css('--grid') }, border: { display: false },
+           title: { display: true, text: yTitle, color: css('--muted') }, ticks: { color: css('--muted') } }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: css('--surface'), titleColor: css('--ink'), bodyColor: css('--ink'), borderColor: css('--border'),
+        borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+        filter: i => !i.dataset.hideInTooltip && i.raw && i.raw.y != null,
+        callbacks: { title: items => items.length ? dt(items[0].parsed.x) : '' }
+      }
+    },
+    elements: { point: { radius: 0, hoverRadius: 4 }, line: { borderWidth: 2, tension: 0 } }
+  };
+}
+
+function legend(el, items) {
+  el.innerHTML = items.map(([c, t, cls]) => `<span><i class="${cls || ''}" style="background:${c}"></i>${t}</span>`).join('');
+}
+
+// Legende als Schalter: Klick blendet den Wert ein/aus, ohne neu zu laden
+function toggleLegend(el, items) {
+  el.innerHTML = items.map(([key, c, t, cls]) =>
+    `<button type="button" data-key="${key.replace(/"/g, '&quot;')}" aria-pressed="${!!state.show[key]}">` +
+    `<i class="${cls || ''}" style="background:${c}"></i><span>${t}</span></button>`).join('');
+}
+$('#lg-main').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  const k = btn.dataset.key;
+  state.show[k] = !state.show[k];
+  if (lastSerie) renderSeries(lastSerie);
+});
+
+function draw(id, cfg) { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); }
+
+function renderSeries(d) {
+  lastSerie = d;
+  const span = Date.parse(d.bis) - Date.parse(d.von);
+  const xMin = Date.parse(d.von), xMax = Date.parse(d.bis);
+  const by = Object.fromEntries(d.serien.map(s => [s.typ === 'epic-gesamt' ? '__all' : s.name, s]));
+  const fort = state.server && by[state.server] ? by[state.server] : by.__all;
+  const fortName = state.server || 'Fortnite (Mittel EU-Server)';
+  const icmp = d.serien.filter(s => s.typ === 'icmp');
+  const colors = [css('--s2'), css('--s3'), css('--s4')];
+  const S1 = css('--s1');
+  const b = d.bucket_s;
+  const on = k => !!state.show[k];  // nur Fortnite ist anfangs eingeschaltet
+  const sets = [
+    { label: 'p95', data: withGaps(fort.punkte, b, 3), borderWidth: 0, backgroundColor: alpha(S1, 0.16), fill: '+1', hideInTooltip: true, order: 3, hidden: !on('band') },
+    { label: 'Min', data: withGaps(fort.punkte, b, 2), borderWidth: 0, fill: false, hideInTooltip: true, order: 3, hidden: !on('band') },
+    { label: fortName, data: withGaps(fort.punkte, b, 1), borderColor: S1, backgroundColor: S1, order: 1, hidden: !on('fortnite') },
+    ...icmp.map((s, i) => ({ label: s.name, data: withGaps(s.punkte, b, 1), borderColor: colors[i % 3], backgroundColor: colors[i % 3], order: 2, hidden: !on(s.name) }))
+  ];
+  const o = baseOptions('Latenz (ms)', span);
+  o.scales.x.min = xMin; o.scales.x.max = xMax;
+  o.plugins.thresholds = { lines: lastStatus && on('schwellen') ? [[lastStatus.schwellen.gut, `${lastStatus.schwellen.gut} ms · gut`], [lastStatus.schwellen.kritisch, `${lastStatus.schwellen.kritisch} ms · kaum spielbar`]] : [] };
+  o.plugins.tooltip.callbacks.label = c => {
+    let t = ` ${c.dataset.label}: ${fmt(c.parsed.y, 1)} ms`;
+    if (c.datasetIndex === 2) { const p = sets[0].data[c.dataIndex]; if (p && p.y != null) t += ` (p95 ${fmt(p.y, 0)})`; }
+    return t;
+  };
+  draw('#c-main', { type: 'line', data: { datasets: sets }, options: o });
+  toggleLegend($('#lg-main'), [['fortnite', S1, fortName], ['band', alpha(S1, 1), 'Bereich Min–p95', 'band'],
+    ...icmp.map((s, i) => [s.name, colors[i % 3], s.name]), ['schwellen', '', 'Schwellen', 'dash']]);
+
+  // Paketverlust: Fortnite + Cable4-Knoten
+  const hop = icmp.find(s => /cable4|provider/i.test(s.name)) || icmp[1];
+  const lossSets = [{ label: fortName, data: fort.punkte.map(p => ({ x: p[0] * 1000, y: p[4] })), backgroundColor: S1 }];
+  if (hop) lossSets.push({ label: hop.name, data: hop.punkte.map(p => ({ x: p[0] * 1000, y: p[4] })), backgroundColor: colors[icmp.indexOf(hop) % 3] });
+  const lo = baseOptions('Verlust (%)', span);
+  lo.scales.x.min = xMin; lo.scales.x.max = xMax; lo.scales.y.suggestedMax = 5;
+  lo.datasets = { bar: { barPercentage: 0.9, categoryPercentage: 0.9, borderRadius: 2, maxBarThickness: 8 } };
+  lo.plugins.tooltip.callbacks.label = c => ` ${c.dataset.label}: ${fmt(c.parsed.y, 1)} %`;
+  draw('#c-loss', { type: 'bar', data: { datasets: lossSets }, options: lo });
+  legend($('#lg-loss'), lossSets.map(s => [s.backgroundColor, s.label]));
+
+  // Speedtest
+  const so = baseOptions('Mbit/s', span);
+  so.scales.x.min = xMin; so.scales.x.max = xMax;
+  so.elements.point.radius = d.speedtests.length < 60 ? 3 : 0;
+  so.plugins.tooltip.callbacks.label = c => ` ${c.dataset.label}: ${fmt(c.parsed.y, 1)} Mbit/s`;
+  const S2 = css('--s2');
+  draw('#c-sp', { type: 'line', data: { datasets: [
+    { label: 'Download', data: d.speedtests.map(p => ({ x: p[0] * 1000, y: p[1] })), borderColor: S1, backgroundColor: S1 },
+    { label: 'Upload', data: d.speedtests.map(p => ({ x: p[0] * 1000, y: p[2] })), borderColor: S2, backgroundColor: S2 }] }, options: so });
+  legend($('#lg-sp'), [[S1, 'Download'], [S2, 'Upload']]);
+
+  $('#events').innerHTML = d.ereignisse.slice().reverse().map(e =>
+    `<li><time>${dt(e[0] * 1000)}</time><span class="t">${e[1]}</span><span>${e[2].replace(/</g, '&lt;')}</span></li>`).join('')
+    || '<li class="sub">Keine Ereignisse im gewählten Zeitraum.</li>';
+}
+
+// ------------------------------------------------------------------ Heatmap
+const BINS = [[40, '--q1', '< 40'], [50, '--q2', '40–50'], [60, '--q3', '50–60'], [80, '--q4', '60–80'],
+              [100, '--q5', '80–100'], [130, '--q6', '100–130'], [1e9, '--q7', '> 130']];
+function renderHeat(h) {
+  const tip = $('#tip');
+  let html = '<tr><th></th>' + Array.from({ length: 24 }, (_, i) => `<th>${i % 3 === 0 ? i : ''}</th>`).join('') + '</tr>';
+  h.werte.forEach((row, wd) => {
+    html += `<tr><th>${h.wochentage[wd]}</th>` + row.map((v, hr) => {
+      const bin = v == null ? null : BINS.find(b => v < b[0]);
+      const style = bin ? `background:var(${bin[1]})` : '';
+      return `<td style="${style}" data-t="${h.wochentage[wd]} ${String(hr).padStart(2, '0')}:00–${String(hr + 1).padStart(2, '0')}:00: ${v == null ? 'keine Daten' : fmt(v) + ' ms (' + h.anzahl[wd][hr] + ' Messungen)'}"></td>`;
+    }).join('') + '</tr>';
+  });
+  const t = $('#heat'); t.innerHTML = html;
+  t.onmousemove = e => { const d = e.target.dataset.t; if (!d) { tip.style.display = 'none'; return; }
+    tip.textContent = d; tip.style.display = 'block'; tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY + 12) + 'px'; };
+  t.onmouseleave = () => tip.style.display = 'none';
+  $('#heat-scale').innerHTML = 'ms: ' + BINS.map(b => `<b style="background:var(${b[1]})"></b>${b[2]}&nbsp;`).join('');
+}
+
+// ------------------------------------------------------------------ Laden
+function rangeQuery() {
+  if (state.end == null) return `stunden=${state.hours}`;
+  const von = new Date(state.end - state.hours * 3600e3), bis = new Date(state.end);
+  return `von=${encodeURIComponent(von.toISOString())}&bis=${encodeURIComponent(bis.toISOString())}`;
+}
+
+// ------------------------------------------------------------------ Blättern
+function windowRange() {
+  const end = state.end ?? Date.now();
+  return [end - state.hours * 3600e3, end];
+}
+function updateNav() {
+  const [from, to] = windowRange();
+  const f = d => new Date(d).toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  $('#nav-label').innerHTML = `${f(from)} – ${state.end == null ? '<span class="live">jetzt (live)</span>' : f(to)}`;
+  $('#nav-next').disabled = state.end == null;
+  $('#nav-now').disabled = state.end == null;
+  const first = lastStatus && lastStatus.erste_messung ? Date.parse(lastStatus.erste_messung) : null;
+  $('#nav-prev').disabled = first != null && from <= first;
+}
+function shift(ms) {
+  const [, to] = windowRange();
+  let end = to + ms;
+  const first = lastStatus && lastStatus.erste_messung ? Date.parse(lastStatus.erste_messung) : null;
+  if (first != null) end = Math.max(end, first + 3600e3);  // nicht vor die erste Messung
+  state.end = end >= Date.now() - 60e3 ? null : end;           // am rechten Rand wieder live
+  updateNav(); refreshSeries();
+}
+$('#nav-prev').onclick = () => shift(-state.hours * 3600e3);
+$('#nav-next').onclick = () => shift(state.hours * 3600e3);
+$('#nav-now').onclick = () => { state.end = null; updateNav(); refreshSeries(); };
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, select, textarea')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); $('#nav-prev').click(); }
+  if (e.key === 'ArrowRight' && state.end != null) { e.preventDefault(); $('#nav-next').click(); }
+});
+// Ziehen mit Maus oder Finger: Verschiebung proportional zur Diagrammbreite
+(() => {
+  const area = $('#pan-area');
+  let startX = null;
+  area.addEventListener('pointerdown', e => { startX = e.clientX; area.setPointerCapture(e.pointerId); });
+  area.addEventListener('pointermove', e => { if (startX != null && Math.abs(e.clientX - startX) > 4) area.classList.add('dragging'); });
+  const end = e => {
+    if (startX == null) return;
+    const dx = e.clientX - startX; startX = null; area.classList.remove('dragging');
+    const ch = charts['#c-main'];
+    const width = ch ? ch.chartArea.right - ch.chartArea.left : area.clientWidth;
+    if (Math.abs(dx) < 20) return;  // Klick, kein Ziehen
+    shift(-dx / width * state.hours * 3600e3);
+  };
+  area.addEventListener('pointerup', end);
+  area.addEventListener('pointercancel', () => { startX = null; area.classList.remove('dragging'); });
+})();
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error(u + ': ' + r.status); return r.json(); }
+async function refreshSeries() {
+  try {
+    renderSeries(await getJSON('/api/serie?' + rangeQuery()));
+    $('#csv').href = '/api/export.csv?' + rangeQuery();
+  } catch (e) { console.error(e); }
+}
+async function refresh() {
+  try {
+    renderStatus(await getJSON('/api/status'));
+    updateNav();
+    await refreshSeries();
+    renderHeat(await getJSON('/api/heatmap?tage=28'));
+  } catch (e) {
+    $('#ampel').innerHTML = '<span class="dot" style="background:var(--muted)"></span><span>Keine Verbindung zum Messprogramm</span>';
+    console.error(e);
+  }
+}
+
+$('#range').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  document.querySelectorAll('#range button').forEach(b => b.setAttribute('aria-pressed', b === btn));
+  const h = btn.dataset.h;
+  $('#custom').hidden = h !== 'custom';
+  if (h === 'custom') {
+    const [from, to] = windowRange();
+    $('#von').value = toLocalInput(new Date(from)); $('#bis').value = toLocalInput(new Date(to));
+    return;
+  }
+  state.hours = Number(h); updateNav(); refreshSeries();  // Endzeitpunkt bleibt: nur die Breite ändert sich
+});
+$('#apply').onclick = () => {
+  const von = Date.parse($('#von').value), bis = Date.parse($('#bis').value);
+  if (!(bis > von)) return;
+  state.hours = (bis - von) / 3600e3;
+  state.end = bis >= Date.now() - 60e3 ? null : bis;
+  updateNav(); refreshSeries();
+};
+$('#server').onchange = e => { state.server = e.target.value; if (lastSerie) renderSeries(lastSerie); };
+$('#note').onsubmit = async e => {
+  e.preventDefault();
+  const text = $('#note-text').value.trim(); if (!text) return;
+  const t = $('#note-time').value;
+  await fetch('/api/notiz', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, zeit: t ? new Date(t).toISOString() : null }) });
+  $('#note-text').value = ''; $('#note-time').value = ''; refresh();
+};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (lastSerie) renderSeries(lastSerie); });
+
+refresh();
+setInterval(() => { if (state.end == null) refresh(); else updateNav(); }, 60000);  // beim Zurückblättern nicht springen
+</script>
+</body>
+</html>
